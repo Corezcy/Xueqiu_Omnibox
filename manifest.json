@@ -13,6 +13,7 @@
     "default_title": "搜索雪球股票",
     "default_icon": "icon.png"
   },
+  "permissions": ["storage"],
   "host_permissions": [
     "https://qt.gtimg.cn/*"
   ]

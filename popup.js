@@ -1,21 +1,28 @@
 const DEFAULT_INDEX_CODES = ["sh000001", "sz399001", "sz399006"];
 const STOCK_FILE = "stock.txt";
 const REFRESH_INTERVAL_MS = 2000;
+const REFRESH_SETTINGS_STORAGE_KEY = "quoteRefreshSettings";
+const SUPPORTED_REFRESH_INTERVALS_MS = [1000, 2000, 5000, 10000];
 const CN_CODE_PATTERN = /^(sh|sz)(\d{6})$/i;
 const HK_CODE_PATTERN = /^hk(?:[.:_-])?(\d{1,5})$/i;
 const US_CODE_PATTERN = /^us(?:[.:_-])?([a-z][a-z0-9.-]{0,19})$/i;
 
-document.addEventListener("DOMContentLoaded", () => {
+if (typeof document !== "undefined") {
+  document.addEventListener("DOMContentLoaded", () => {
   const input = document.getElementById("stockInput");
   const quoteBody = document.getElementById("quoteBody");
   const fetchState = document.getElementById("fetchState");
   const updateTime = document.getElementById("updateTime");
   const errorBanner = document.getElementById("errorBanner");
+  const autoRefreshToggle = document.getElementById("autoRefreshToggle");
+  const refreshIntervalSelect = document.getElementById("refreshInterval");
+  const sourceNote = document.getElementById("sourceNote");
 
   let watchCodes = [];
   let refreshTimer = null;
   let isFetching = false;
   let allCodes = [...DEFAULT_INDEX_CODES];
+  let refreshSettings = normalizeRefreshSettings();
 
   input.focus();
 
@@ -44,10 +51,16 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  autoRefreshToggle.addEventListener("change", () => {
+    void handleRefreshToggleChange();
+  });
+
+  refreshIntervalSelect.addEventListener("change", () => {
+    void handleRefreshIntervalChange();
+  });
+
   window.addEventListener("beforeunload", () => {
-    if (refreshTimer) {
-      clearInterval(refreshTimer);
-    }
+    stopAutoRefresh();
   });
 
   initialize().catch((error) => {
@@ -57,6 +70,8 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   async function initialize() {
+    refreshSettings = await loadRefreshSettings();
+    applyRefreshSettingsToControls();
     watchCodes = await loadWatchCodes(STOCK_FILE);
     allCodes = mergeCodes(DEFAULT_INDEX_CODES, watchCodes);
     const initialIndexRows = DEFAULT_INDEX_CODES.map((code) =>
@@ -66,9 +81,7 @@ document.addEventListener("DOMContentLoaded", () => {
     renderTable(quoteBody, initialIndexRows, initialWatchRows);
 
     await refreshQuotes();
-    refreshTimer = setInterval(() => {
-      void refreshQuotes();
-    }, REFRESH_INTERVAL_MS);
+    syncAutoRefreshTimer();
   }
 
   async function refreshQuotes() {
@@ -100,7 +113,118 @@ document.addEventListener("DOMContentLoaded", () => {
       isFetching = false;
     }
   }
-});
+
+  async function handleRefreshToggleChange() {
+    refreshSettings = normalizeRefreshSettings({
+      ...refreshSettings,
+      enabled: autoRefreshToggle.checked,
+    });
+    applyRefreshSettingsToControls();
+    await saveRefreshSettings(refreshSettings);
+
+    if (refreshSettings.enabled) {
+      await refreshQuotes();
+    } else {
+      setFetchState(fetchState, "自动刷新已关闭");
+    }
+
+    syncAutoRefreshTimer();
+  }
+
+  async function handleRefreshIntervalChange() {
+    refreshSettings = normalizeRefreshSettings({
+      ...refreshSettings,
+      intervalMs: Number(refreshIntervalSelect.value),
+    });
+    applyRefreshSettingsToControls();
+    await saveRefreshSettings(refreshSettings);
+    syncAutoRefreshTimer();
+
+    if (refreshSettings.enabled) {
+      await refreshQuotes();
+    }
+  }
+
+  function applyRefreshSettingsToControls() {
+    autoRefreshToggle.checked = refreshSettings.enabled;
+    refreshIntervalSelect.value = String(refreshSettings.intervalMs);
+    refreshIntervalSelect.disabled = !refreshSettings.enabled;
+    sourceNote.textContent = getSourceNoteText(refreshSettings);
+  }
+
+  function syncAutoRefreshTimer() {
+    stopAutoRefresh();
+    if (!refreshSettings.enabled) {
+      return;
+    }
+
+    refreshTimer = window.setInterval(() => {
+      void refreshQuotes();
+    }, refreshSettings.intervalMs);
+  }
+
+  function stopAutoRefresh() {
+    if (!refreshTimer) {
+      return;
+    }
+    clearInterval(refreshTimer);
+    refreshTimer = null;
+  }
+  });
+}
+
+async function loadRefreshSettings() {
+  const defaultSettings = normalizeRefreshSettings();
+
+  if (
+    typeof chrome === "undefined" ||
+    !chrome.storage ||
+    !chrome.storage.local
+  ) {
+    return defaultSettings;
+  }
+
+  const stored = await chrome.storage.local.get(REFRESH_SETTINGS_STORAGE_KEY);
+  return normalizeRefreshSettings(stored[REFRESH_SETTINGS_STORAGE_KEY]);
+}
+
+async function saveRefreshSettings(settings) {
+  if (
+    typeof chrome === "undefined" ||
+    !chrome.storage ||
+    !chrome.storage.local
+  ) {
+    return;
+  }
+
+  await chrome.storage.local.set({
+    [REFRESH_SETTINGS_STORAGE_KEY]: normalizeRefreshSettings(settings),
+  });
+}
+
+function normalizeRefreshSettings(raw = {}) {
+  const enabled =
+    typeof raw.enabled === "boolean" ? raw.enabled : true;
+  const intervalMs = SUPPORTED_REFRESH_INTERVALS_MS.includes(raw.intervalMs)
+    ? raw.intervalMs
+    : REFRESH_INTERVAL_MS;
+
+  return { enabled, intervalMs };
+}
+
+function getSourceNoteText(settings) {
+  if (!settings.enabled) {
+    return "数据源：腾讯行情接口，自动刷新已关闭";
+  }
+
+  return `数据源：腾讯行情接口，每 ${formatIntervalLabel(
+    settings.intervalMs
+  )} 自动刷新`;
+}
+
+function formatIntervalLabel(intervalMs) {
+  return `${intervalMs / 1000} 秒`;
+}
 
 async function loadWatchCodes(filename) {
   const url = chrome.runtime.getURL(filename);
@@ -348,4 +472,12 @@ function escapeHtml(text) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
+}
+
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = {
+    normalizeRefreshSettings,
+    getSourceNoteText,
+    formatIntervalLabel,
+  };
 }

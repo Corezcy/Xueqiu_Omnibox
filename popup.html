@@ -99,6 +99,7 @@
         align-items: center;
         gap: 8px;
         font-size: 12px;
+        flex-wrap: wrap;
       }
 
       .fetch-state {
@@ -119,6 +120,102 @@
       .update-time {
         font-variant-numeric: tabular-nums;
         color: var(--text-sub);
+      }
+
+      .refresh-controls {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 4px 8px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.78);
+        border: 1px solid rgba(31, 100, 214, 0.12);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+      }
+
+      .refresh-label {
+        font-size: 12px;
+        color: var(--text-sub);
+        white-space: nowrap;
+      }
+
+      .switch {
+        position: relative;
+        display: inline-flex;
+        width: 40px;
+        height: 22px;
+      }
+
+      .switch input {
+        position: absolute;
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      .switch-track {
+        width: 100%;
+        height: 100%;
+        border-radius: 999px;
+        background: linear-gradient(180deg, #d3ddeb 0%, #bfccde 100%);
+        box-shadow: inset 0 1px 2px rgba(22, 44, 81, 0.18);
+        transition: background 0.22s ease, box-shadow 0.22s ease;
+        cursor: pointer;
+      }
+
+      .switch-track::after {
+        content: "";
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: linear-gradient(180deg, #ffffff 0%, #eff4fb 100%);
+        box-shadow: 0 2px 6px rgba(16, 34, 61, 0.18);
+        transition: transform 0.22s ease;
+      }
+
+      .switch input:checked + .switch-track {
+        background: linear-gradient(135deg, var(--primary) 0%, #4d8cff 100%);
+        box-shadow: inset 0 1px 2px rgba(8, 44, 114, 0.3),
+          0 0 0 3px rgba(31, 100, 214, 0.12);
+      }
+
+      .switch input:checked + .switch-track::after {
+        transform: translateX(18px);
+      }
+
+      .switch input:focus-visible + .switch-track {
+        outline: 2px solid rgba(31, 100, 214, 0.35);
+        outline-offset: 2px;
+      }
+
+      .refresh-select {
+        border: 1px solid rgba(31, 100, 214, 0.14);
+        border-radius: 999px;
+        padding: 4px 26px 4px 10px;
+        min-width: 84px;
+        font-size: 12px;
+        color: var(--text-main);
+        background: linear-gradient(180deg, #ffffff 0%, #f4f8ff 100%);
+        outline: none;
+        cursor: pointer;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease,
+          opacity 0.2s ease;
+      }
+
+      .refresh-select:hover {
+        border-color: rgba(31, 100, 214, 0.38);
+      }
+
+      .refresh-select:focus {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 2px rgba(31, 100, 214, 0.14);
+      }
+
+      .refresh-select:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
       }
 
       .error-banner {
@@ -243,6 +340,19 @@
         <div class="watchlist-meta">
           <span id="fetchState" class="fetch-state">准备中</span>
           <span id="updateTime" class="update-time">--:--:--</span>
+          <div class="refresh-controls">
+            <span class="refresh-label">自动刷新</span>
+            <label class="switch" for="autoRefreshToggle">
+              <input type="checkbox" id="autoRefreshToggle" />
+              <span class="switch-track" aria-hidden="true"></span>
+            </label>
+            <select id="refreshInterval" class="refresh-select" aria-label="刷新间隔">
+              <option value="1000">1 秒</option>
+              <option value="2000">2 秒</option>
+              <option value="5000">5 秒</option>
+              <option value="10000">10 秒</option>
+            </select>
+          </div>
         </div>
       </div>
       <p id="errorBanner" class="error-banner hidden"></p>
@@ -266,7 +376,7 @@
           </tbody>
         </table>
       </div>
-      <p class="source-note">数据源：腾讯行情接口，每 1 秒自动刷新</p>
+      <p id="sourceNote" class="source-note">数据源：腾讯行情接口</p>
     </section>
 
     <script src="popup.js"></script>
